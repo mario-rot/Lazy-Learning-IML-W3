@@ -5,60 +5,75 @@ from pathlib import Path
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, MinMaxScaler
 from scipy.io import arff
+import os
 
 # from torch.utils.data import Dataset
 
 class MLDataset():
     def __init__(self, 
-                 data_path: Union[Path, str]):
+                 data_path: Union[Path, str],
+                 verbose=False,
+                 save_dir=False):
         self.data_path = data_path
+        self.verbose = verbose
+        self.save_dir = save_dir
         self.raw_data = None
         self.meta = None
         self.df = None 
         self.y_true = None
         self.processed_data = None
         self.classes_relation = None
+        self.TrainMatrix = None
+        self.TestMatrix = None
+        self.train = None
+        self.train_raw = None
+        self.test = None
+        self.test_raw = None        
 
-        self.preprocessing()
+        self.preprocess_folds()
+
+        # self.preprocessing()
 
     def __len__(self):
-        return len(self.df)
+        return len(self.TrainMatrix)
 
     def __getitem__(self, idx):
-        return self.processed_data.iloc[idx,:-1], self.processed_data.iloc[idx,-1]
+        return self.TrainMatrix[idx], self.TestMatrix[idx]
 
-    def import_raw_dataset(self):
-        data, self.meta = arff.loadarff(self.data_path)
-        data = pd.DataFrame(data)
-        self.raw_data = self.string_decode(data)
-        return self.raw_data, self.meta
+    def preprocess_folds(self):
+        self.TrainMatrix = []
+        self.TestMatrix = []
+        #os.chdir(self.data_path)
+        for file in os.listdir(self.data_path):
+            file_path = f"{self.data_path}\{file}"
+            self.processed_data, self.raw_data = self.preprocessing(Path(file_path))
+            if file.endswith("train.arff"):
+                self.TrainMatrix.append(self.processed_data)
+                self.train = self.processed_data
+                self.train_raw = self.raw_data
+                if self.save_dir:
+                    self.save('processed_' + file, self.processed_data, self.save_dir)
+            elif file.endswith("test.arff"):
+                self.TestMatrix.append(self.processed_data)
+                self.test = self.processed_data
+                self.test_raw = self.raw_data
+                if self.save_dir:
+                    self.save('processed_' + file, self.processed_data, self.save_dir)
 
+        return self.TrainMatrix, self.TestMatrix
 
-    def preprocessing(self) -> pd.DataFrame:
-        # Preprocessing
-        print(f'---Preprocessing {self.data_path.name} dataset---')
-        self.df, meta = self.import_raw_dataset()
-        self.y_true = self.get_predicted_value(self.df)
-        self.classes_relation =  {k:v for v,k in enumerate(set(self.y_true))}
-        self.df = self.remove_predicted_value(self.df)
-        nulls = self.check_null_values(self.df)
-        if nulls.sum() != 0:
-            print(f'There is nulls values: {nulls}')
-        else:
-            print(f'Nan values: 0')
-        self.processed_data = self.standardization(self.df)
-        self.processed_data['y_true'] = self.encode_labels(self.y_true, self.classes_relation)
-
-        return self.processed_data
-
-    def save(self, filename, dir = ''):
-        self.processed_data.to_csv(dir + filename + '.csv')
+    def save(self, filename, matrix, dir = ''):
+        matrix.to_csv(dir + filename + '.csv')
 
     def statistics(self, data_type):
-        data = self.raw_data.iloc[:,:-1] if data_type == 'raw' else self.processed_data.iloc[:,:-1]
-        labels = self.raw_data.iloc[:,-1] if data_type == 'raw' else self.processed_data.iloc[:,-1]
+        if data_type == 'raw':
+            data = pd.concat([self.train_raw.iloc[:,:-1], self.test_raw.iloc[:,:-1]])
+            labels = pd.concat([self.train_raw.iloc[:,-1], self.test_raw.iloc[:,-1]])
+        else:
+            data = pd.concat([self.train.iloc[:,:-1], self.test.iloc[:,:-1]])
+            labels = pd.concat([self.train.iloc[:,-1], self.test.iloc[:,-1]])
         gen_stats = {'n_classes': len(set(labels)),
                      'n_features': len(data.columns),
                      'n_instances': len(data)}
@@ -71,6 +86,31 @@ class MLDataset():
         stats = pd.DataFrame.from_dict(stats,orient = 'index', columns=data.columns)
         return gen_stats, stats
         
+
+    def preprocessing(self, fold_path) -> pd.DataFrame:
+        # Preprocessing
+        if self.verbose:
+            print(f'---Preprocessing {fold_path.name} dataset fold---')
+        df, meta = self.import_raw_dataset(fold_path)
+        y_true = self.get_predicted_value(df)
+        classes_relation =  {k:v for v,k in enumerate(set(y_true))}
+        df = self.remove_predicted_value(df)
+        nulls = self.check_null_values(df)
+        if self.verbose:
+            if nulls.sum() != 0:
+                print(f'There is nulls values: {nulls}')
+            else:
+                print(f'Nan values: 0')
+        processed_data = self.standardization(df)
+        processed_data['y_true'] = self.encode_labels(y_true, classes_relation)
+        return processed_data, df
+        
+    
+    def import_raw_dataset(self, fold_path):
+        data, meta = arff.loadarff(fold_path)
+        data = pd.DataFrame(data)
+        raw_data = self.string_decode(data)
+        return raw_data, meta
 
     @staticmethod
     def string_decode(df: pd.DataFrame):
@@ -97,7 +137,7 @@ class MLDataset():
         num_features = df.select_dtypes(include=np.number).columns
         num_transformer = Pipeline(steps=[
             ('replace_nan', SimpleImputer(strategy='mean')),
-            ('scaler', StandardScaler())])
+            ('scaler', MinMaxScaler())])
         # categorical features
         cat_features = df.select_dtypes(exclude=np.number).columns
         cat_transformer = Pipeline(steps=[
