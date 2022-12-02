@@ -9,10 +9,9 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder, MinMaxScaler
 from scipy.io import arff
 import os
 
-# from torch.utils.data import Dataset
 
-class MLDataset():
-    def __init__(self, 
+class MLDataset:
+    def __init__(self,
                  data_path: Union[Path, str],
                  verbose=False,
                  save_dir=False):
@@ -21,7 +20,7 @@ class MLDataset():
         self.save_dir = save_dir
         self.raw_data = None
         self.meta = None
-        self.df = None 
+        self.df = None
         self.y_true = None
         self.processed_data = None
         self.classes_relation = None
@@ -30,7 +29,7 @@ class MLDataset():
         self.train = None
         self.train_raw = None
         self.test = None
-        self.test_raw = None        
+        self.test_raw = None
 
         self.preprocess_folds()
 
@@ -45,55 +44,60 @@ class MLDataset():
     def preprocess_folds(self):
         self.TrainMatrix = []
         self.TestMatrix = []
-        #os.chdir(self.data_path)
+        # os.chdir(self.data_path)
         for file in os.listdir(self.data_path):
             file_path = f"{self.data_path}\{file}"
-            self.processed_data, self.raw_data = self.preprocessing(Path(file_path))
+            self.processed_data, self.raw_data = self.preprocessing(
+                Path(file_path))
             if file.endswith("train.arff"):
                 self.TrainMatrix.append(self.processed_data)
                 self.train = self.processed_data
                 self.train_raw = self.raw_data
                 if self.save_dir:
-                    self.save('processed_' + file, self.processed_data, self.save_dir)
+                    self.save('processed_' + file, self.processed_data,
+                              self.save_dir)
             elif file.endswith("test.arff"):
                 self.TestMatrix.append(self.processed_data)
                 self.test = self.processed_data
                 self.test_raw = self.raw_data
                 if self.save_dir:
-                    self.save('processed_' + file, self.processed_data, self.save_dir)
+                    self.save('processed_' + file, self.processed_data,
+                              self.save_dir)
 
         return self.TrainMatrix, self.TestMatrix
 
-    def save(self, filename, matrix, dir = ''):
+    def save(self, filename, matrix, dir=''):
         matrix.to_csv(dir + filename + '.csv')
 
     def statistics(self, data_type):
         if data_type == 'raw':
-            data = pd.concat([self.train_raw.iloc[:,:-1], self.test_raw.iloc[:,:-1]])
-            labels = pd.concat([self.train_raw.iloc[:,-1], self.test_raw.iloc[:,-1]])
+            data = pd.concat(
+                [self.train_raw.iloc[:, :-1], self.test_raw.iloc[:, :-1]])
+            labels = pd.concat(
+                [self.train_raw.iloc[:, -1], self.test_raw.iloc[:, -1]])
         else:
-            data = pd.concat([self.train.iloc[:,:-1], self.test.iloc[:,:-1]])
-            labels = pd.concat([self.train.iloc[:,-1], self.test.iloc[:,-1]])
+            data = pd.concat([self.train.iloc[:, :-1], self.test.iloc[:, :-1]])
+            labels = pd.concat([self.train.iloc[:, -1], self.test.iloc[:, -1]])
         gen_stats = {'n_classes': len(set(labels)),
                      'n_features': len(data.columns),
                      'n_instances': len(data)}
-        stats = {'Nulls':data.isnull().sum(0).values,
+        stats = {'Nulls': data.isnull().sum(0).values,
                  'Mins': data.min().values,
                  'Max': data.max().values,
                  'Means': data.mean().values,
                  'StD': data.std().values,
                  'Variance': data.var().values}
-        stats = pd.DataFrame.from_dict(stats,orient = 'index', columns=data.columns)
+        stats = pd.DataFrame.from_dict(stats, orient='index',
+                                       columns=data.columns)
         return gen_stats, stats
-        
 
-    def preprocessing(self, fold_path) -> pd.DataFrame:
+    def preprocessing(self, fold_path) -> Tuple[pd.DataFrame, pd.DataFrame]:
         # Preprocessing
         if self.verbose:
             print(f'---Preprocessing {fold_path.name} dataset fold---')
         df, meta = self.import_raw_dataset(fold_path)
         y_true = self.get_predicted_value(df)
-        classes_relation =  {k:v for v,k in enumerate(set(y_true))}
+        classes_relation = {k: v for v, k in enumerate(set(y_true))}
         df = self.remove_predicted_value(df)
         nulls = self.check_null_values(df)
         if self.verbose:
@@ -102,10 +106,10 @@ class MLDataset():
             else:
                 print(f'Nan values: 0')
         processed_data = self.standardization(df)
-        processed_data['y_true'] = self.encode_labels(y_true, classes_relation)
+        processed_data['y_true'] = self.encode_labels(y_true,
+                                                      classes_relation)
         return processed_data, df
-        
-    
+
     def import_raw_dataset(self, fold_path):
         data, meta = arff.loadarff(fold_path)
         data = pd.DataFrame(data)
@@ -118,19 +122,24 @@ class MLDataset():
             if df[col].dtype == object:
                 df[col] = df[col].str.decode('utf-8')
         return df
+
     @staticmethod
     def remove_predicted_value(df: pd.DataFrame) -> pd.DataFrame:
         return df.iloc[:, :-1]
+
     @staticmethod
     def get_predicted_value(df: pd.DataFrame) -> pd.DataFrame:
         return df.iloc[:, -1]
+
     @staticmethod
     def check_null_values(df: pd.DataFrame) -> pd.Series:
         return df.isnull().sum()
+
     @staticmethod
     def encode_labels(labels, classes_relation):
         num_classes = [classes_relation[item] for item in labels]
         return num_classes
+
     @staticmethod
     def standardization(df: pd.DataFrame, columns=None) -> pd.DataFrame:
         # numerical features
@@ -176,6 +185,7 @@ class MLDataset():
         # processed dataset
         processed_df = pd.DataFrame(X_trans, columns=columns)
         return processed_df
+
 
 if __name__ == '__main__':
     data_path = Path('../data/raw/iris.csv')
