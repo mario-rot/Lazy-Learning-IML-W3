@@ -93,7 +93,7 @@ class MLDataset():
             print(f'---Preprocessing {fold_path.name} dataset fold---')
         df, meta = self.import_raw_dataset(fold_path)
         y_true = self.get_predicted_value(df)
-        classes_relation =  {k:v for v,k in enumerate(set(y_true))}
+        classes_relation =  {k:v for v,k in enumerate(sorted(set(y_true)))}
         df = self.remove_predicted_value(df)
         nulls = self.check_null_values(df)
         if self.verbose:
