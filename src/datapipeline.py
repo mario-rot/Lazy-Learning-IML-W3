@@ -54,6 +54,8 @@ class MLDataset:
                 if self.save_dir:
                     self.save('processed_' + file, self.processed_data, self.save_dir)
             elif file.endswith("test.arff"):
+                if self.processed_data.iloc[:,:-1].shape[1] < 24 and 'cmc' in file: 
+                    self.processed_data.insert(17, 'hoccupation_4', np.zeros([len(self.processed_data)]))
                 self.TestMatrix.append(self.processed_data)
                 self.test = self.processed_data
                 self.test_raw = self.raw_data
