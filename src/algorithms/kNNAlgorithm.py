@@ -66,7 +66,7 @@ class kNNAlgorithm:
     def compute_distance(datapoint, x_i, weights, metric='euclidean'):
         w = weights
         if metric == 'cosine':
-            return np.sum(w*datapoint*x_i)/(np.sqrt(np.sum(w*(datapoint**2))* np.sum(w*(x_i**2))))
+            return 1-(np.sum(w*datapoint*x_i)/(np.sqrt(np.sum(w*(datapoint**2))* np.sum(w*(x_i**2)))))
         elif metric in ['euclidean','manhattan']:
             p = 2 if metric == 'euclidean' else 1
             return np.sum(w * abs(datapoint - x_i) ** p) ** (1/p)
