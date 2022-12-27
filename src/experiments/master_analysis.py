@@ -3,6 +3,7 @@ sys.path.append('../../')
 import os
 from src.datapipeline import MLDataset
 from src.algorithms.kNNAlgorithm import kNNAlgorithm
+from src.algorithms.reductionkNNAlgorithm import reductionkNNAlgorithm
 from pathlib import Path
 import itertools
 import numpy as np
@@ -19,6 +20,8 @@ parser.add_argument("-k", "--K", help = "Number of K (int) nearest neighbors to 
 parser.add_argument("-dist", "--Distance", help = "['euclidean','manhattan', 'cosine']", default='euclidean', type=str)
 parser.add_argument("-votes", "--Votes", help = "['majority', 'sheppard', 'idw']", default='majority', type=str)
 parser.add_argument("-weights", "--Weights", help = "['equal','correlation','information_gain']", default='equal', type=str)
+parser.add_argument("-u", "--U", help = "Probability treshold for ENNth reduction", default=0.8, type=float)
+parser.add_argument("-init", "--Init", help = "Initialization for the RNN reduction", default='random', type=str)
 parser.add_argument("-reduction", "--RedTech", help = "['rnn','ennth','drop3']", default='drop3', type=str)
 parser.add_argument("-save", "--Save", help = "Directory to save figs", default=False, type=str)
 
@@ -55,3 +58,21 @@ if args.Experiment == 'PC-KNN':
     results.columns, fold_means.columns = ['fold', 'k', 'distance', 'votes', 'weighting', 'acc', 'corr', 'incorr', 'time'], ['acc', 'corr', 'incorr', 'time']
     if args.Save:
         results.to_csv(save_path.as_posix() + '/fold_res.csv'), fold_means.to_csv(save_path.as_posix() + '/fold_mean_res.csv')
+elif args.Experiment == 'IS-KNN':
+########################### Experiment 2 ###################################
+
+    results,fold_res = {},[]
+    for fold, (TrainMatrix, TestMatrix) in enumerate(ds):
+        rknnalg = reductionkNNAlgorithm(TrainMatrix, args.Weights)
+        if args.RedTech == 'drop3': RTrainMatrix = rknnalg.DROP3_reduction()#args.K, args.Distance)
+        elif args.RedTech == 'ennth': RTrainMatrix = rknnalg.ENNth_reduction()#args.K, args.U, args.Distance)
+        elif args.RedTech == 'rnn': RTrainMatrix = rknnalg.RNN_reduction(args.Init)#,args.K, args.Distance, args.Votes)
+        knnalg = kNNAlgorithm().fit(RTrainMatrix, args.Weights)
+        _, time = knnalg.predict_test(TestMatrix.iloc[:,:-1], args.K, args.Distance, args.Votes, True)
+        acc, corr, incorr = knnalg.evaluate(TestMatrix['y_true'])
+        results[fold] = [fold, args.K, args.Distance, args.Votes, args.Weights, acc,corr,incorr,time, len(RTrainMatrix)/len(TrainMatrix)]
+    
+    results = pd.DataFrame(results).T
+    results.columns = ['fold', 'k', 'distance', 'votes', 'weighting', 'acc', 'corr', 'incorr', 'time', 'storage']
+    if args.Save:
+        results.to_csv(save_path.as_posix() + '/{}_folds_res.csv'.format(args.RedTech))

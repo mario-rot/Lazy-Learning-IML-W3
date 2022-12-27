@@ -12,20 +12,23 @@ class kNNAlgorithm:
         self.TrainLabels = None
         self.WeightingMethod = None
         self.FeaturesWeights = None
-        self.Voting = None
         self.TestPredictions = []
 
-    def fit(self, Dataset: pd.DataFrame, weighting = 'equal'):
-        if 'y_true' in Dataset.columns:
-            self.TrainData = Dataset.iloc[:,:-1]
-            self.TrainLabels = Dataset['y_true']
+    def fit(self, Dataset: pd.DataFrame, weighting = 'equal', y = True):
+        if y:
+            if 'y_true' in Dataset.columns:
+                self.TrainData = Dataset.iloc[:,:-1]
+                self.TrainLabels = Dataset['y_true']
+            else:
+                raise RuntimeError("Data without labels. Please inlcude the labels or rename the column as 'y_true'")
         else:
-            raise RuntimeError("Data without labels. Please inlcude the labels or rename the column as 'y_true'")
+            self.TrainData = Dataset
         if weighting in ['equal', 'information_gain', 'correlation']:
             self.WeightingMethod = weighting
             self.FeaturesWeights = self.compute_weights(self.TrainData, self.TrainLabels, self.WeightingMethod)
         else:
             raise RuntimeError("Invalid weighting method! Posible values: ['equal', 'information_gain', 'correlation']")
+        return self
 
     def kNearestNeighbors(self, datapoint, k, metric='euclidean'):
         neighbors = {}
@@ -76,7 +79,7 @@ class kNNAlgorithm:
     @staticmethod
     def compute_label(neighbors, labels, policy, p=1):
         if policy == 'idw':
-            policy = lambda index: (1 / (neighbors.loc[index][1]**p)) if not label in classes.keys() else classes[label] + (1 / (neighbors.loc[index][1]**p))
+            policy = lambda index: (1 / ((neighbors.loc[index][1]**p)+0.000001)) if not label in classes.keys() else classes[label] + (1 / ((neighbors.loc[index][1]**p)+0.000001))
         elif policy == 'sheppard':
             policy = lambda index: math.e**(-neighbors.loc[index][1]) if not label in classes.keys() else classes[label] + math.e**(-neighbors.loc[index][1])
         elif policy == 'majority':
